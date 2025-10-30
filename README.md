@@ -71,3 +71,9 @@ chsh -s "$HOME/.nix-profile/bin/zsh"
 
 ### 8. Copy over windows-terminal-tokyo.json to your WSL2 Profile
 
+### 9. Manually install kickstart neovim
+
+```bash
+
+git clone https://github.com/nvim-lua/kickstart.nvim.git "${XDG_CONFIG_HOME:-$HOME/.config}"/nvim
+```
