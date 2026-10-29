@@ -1,7 +1,11 @@
-# 🌌 WSL2 Developer Environment (Nix + Home Manager + Tokyo Night)
+# 🌌 WSL2 Developer Environment (Nix + Home Manager)
 
 A reproducible, themed developer setup for **WSL2 (Ubuntu/Debian)** using **Nix** and **Home Manager**.  
-Includes **Python**, **Rust**, **Neovim (kickstart.nvim)**, **Zsh + Starship**, and **Tmux**, all styled with the **Tokyo Night** color scheme.
+Includes **Python + uv**, **Rust**, **Node.js**, **Neovim**,
+**Zsh + Starship**, and **tmux**. The tmux configuration and persistent IPython
+scratchpad use **Rosé Pine Moon** colors. A separate **Tokyo Night** preset is
+provided for Windows Terminal. The shell sets `EDITOR=hx`; install Helix separately
+if it is not already available.
 
 ---
 
@@ -48,6 +52,7 @@ nix-shell '<home-manager>' -A install
 ```bash
 mkdir -p ~/.config/home-manager
 cp home.nix ~/.config/home-manager/home.nix
+cp -R tmux ~/.config/home-manager/
 
 ```
 
@@ -56,6 +61,19 @@ cp home.nix ~/.config/home-manager/home.nix
 ```bash
 home-manager switch
 exec zsh
+```
+
+If the scratchpad files already exist as unmanaged files in `~/.config/tmux/`,
+back them up before applying, or use `home-manager switch -b before-scratchpad`
+with a fresh backup suffix. Home Manager deploys the helper and binding and loads
+the binding from its generated tmux configuration. An existing `~/.tmux.conf`
+must source `~/.config/tmux/tmux.conf` for that managed configuration to load.
+No additional `~/.tmux.conf` is needed on a fresh installation.
+
+For an already running tmux server, load just the new binding without restarting:
+
+```bash
+tmux source-file ~/.config/tmux/python-pad.conf
 ```
 
 ### 7. (Optional) Make ZSH your default shell
@@ -77,3 +95,49 @@ chsh -s "$HOME/.nix-profile/bin/zsh"
 
 git clone https://github.com/nvim-lua/kickstart.nvim.git "${XDG_CONFIG_HOME:-$HOME/.config}"/nvim
 ```
+
+## Python scratchpad
+
+Press **prefix + p** (normally **Ctrl+B**, then **p**) to open a persistent
+IPython popup. It uses the nearest `.venv` or `venv` in the current folder or its
+parents, stopping at a Git root or the home directory. It does not create or
+activate environments automatically.
+
+Create an environment and install IPython explicitly when needed:
+
+```bash
+uv venv --prompt my-env .venv
+uv pip install --python .venv/bin/python ipython
+```
+
+The popup shows the environment's configured name (from `pyvenv.cfg`, otherwise
+`.venv` or `venv`) and full path. Missing environments or missing IPython produce
+a warning; the launcher never installs packages or falls back to global Python.
+
+- **Ctrl+Q:** hide the popup and keep variables in memory.
+- **Prefix + p:** reopen the same environment's session.
+- **Ctrl+D:** exit IPython; the next opening starts a fresh session.
+
+Sessions are separate per environment and host tmux socket. Persistence lasts
+while the background process runs, including when the popup is hidden; variables
+do not survive a reboot. The popup uses a separate tmux server so its appearance
+and detach shortcut do not change the main session. Underlying panes continue
+running while the overlay is open, but tmux pauses their visual refresh.
+
+The Rosé Pine Moon tmux theme and session restoration configuration reference
+TPM plugins. Install TPM and use its install binding (prefix + I) if desired:
+
+```bash
+git clone https://github.com/tmux-plugins/tpm ~/.tmux/plugins/tpm
+```
+
+## Verification
+
+```bash
+python3 -m unittest discover -s tests -v
+nix-instantiate --parse home.nix >/dev/null
+git diff --check
+```
+
+The Python checks require only the standard library. A full popup check also
+requires tmux with popup support and IPython in a disposable test venv.
