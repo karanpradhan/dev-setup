@@ -25,6 +25,8 @@ EVENTS = {
 }
 BADGES = {"approval": "[approve]", "question": "[question]",
           "done": "[done]", "interrupted": "[paused]", "running": "[run]"}
+MAX_DB_BYTES = 16 * 1024 * 1024
+RETENTION_SECONDS = 7 * 86400
 
 
 def clean(value, limit=240):
@@ -48,11 +50,34 @@ def connect():
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     db = sqlite3.connect(path, timeout=0.4)
     db.row_factory = sqlite3.Row
-    db.execute("""CREATE TABLE IF NOT EXISTS agents (
-        id TEXT PRIMARY KEY, parent TEXT NOT NULL DEFAULT '',
-        socket TEXT NOT NULL, pane TEXT NOT NULL, cwd TEXT NOT NULL DEFAULT '',
-        state TEXT NOT NULL DEFAULT 'idle', task TEXT NOT NULL DEFAULT '',
-        detail TEXT NOT NULL DEFAULT '', updated REAL NOT NULL)""")
+    try:
+        # Apply on every writer connection; SQLite does not persist this limit.
+        page_size = db.execute("PRAGMA page_size").fetchone()[0]
+        max_pages = MAX_DB_BYTES // page_size
+        actual = db.execute(f"PRAGMA max_page_count={max_pages}").fetchone()[0]
+        if actual > max_pages:
+            # Never discard active records to fit a pre-existing oversized DB.
+            raise sqlite3.DatabaseError("Monitor database exceeds its size limit")
+        if db.execute("PRAGMA auto_vacuum").fetchone()[0] != 1:
+            existing = db.execute("SELECT 1 FROM sqlite_master WHERE type='table' LIMIT 1").fetchone()
+            db.execute("PRAGMA auto_vacuum=FULL")
+            if existing:
+                # One-time migration of databases created by the old monitor.
+                # Bound CPU time so maintenance cannot stall the agent loop.
+                deadline = time.monotonic() + 0.75
+                db.set_progress_handler(lambda: int(time.monotonic() > deadline), 1000)
+                try:
+                    db.execute("VACUUM")
+                finally:
+                    db.set_progress_handler(None, 0)
+        db.execute("""CREATE TABLE IF NOT EXISTS agents (
+            id TEXT PRIMARY KEY, parent TEXT NOT NULL DEFAULT '',
+            socket TEXT NOT NULL, pane TEXT NOT NULL, cwd TEXT NOT NULL DEFAULT '',
+            state TEXT NOT NULL DEFAULT 'idle', task TEXT NOT NULL DEFAULT '',
+            detail TEXT NOT NULL DEFAULT '', updated REAL NOT NULL)""")
+    except Exception:
+        db.close()
+        raise
     return db
 
 
@@ -167,7 +192,8 @@ def handle_hook(event):
     db = connect()
     try:
         with db:
-            db.execute("DELETE FROM agents WHERE updated < ?", (time.time() - 7 * 86400,))
+            db.execute("DELETE FROM agents WHERE updated < ? OR state='closed'",
+                       (time.time() - RETENTION_SECONDS,))
             record(db, event, socket, pane)
             publish(db, socket, pane)
     finally:

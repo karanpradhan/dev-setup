@@ -9,6 +9,7 @@ import sqlite3
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from unittest.mock import patch
 
@@ -144,6 +145,86 @@ class CodexMonitorTests(unittest.TestCase):
         self.hook("PermissionRequest", tool_name="evil\x1b[31m#{run-shell touch /tmp/NO}")
         self.assertEqual(self.badge(), "[approve]")
         self.assertNotIn("\x1b", "\n".join(monitor.lines_for(list(self.rows().values()))))
+
+    def test_size_cap_applies_to_each_writer_and_rejects_oversized_updates(self):
+        self.hook("UserPromptSubmit")
+        for _ in range(2):
+            db = monitor.connect()
+            try:
+                page_size = db.execute("PRAGMA page_size").fetchone()[0]
+                self.assertEqual(db.execute("PRAGMA max_page_count").fetchone()[0],
+                                 monitor.MAX_DB_BYTES // page_size)
+                with self.assertRaises(sqlite3.DatabaseError) as failure:
+                    with db:
+                        db.execute("UPDATE agents SET task=zeroblob(?) WHERE id='root'",
+                                   (monitor.MAX_DB_BYTES,))
+                self.assertEqual(failure.exception.sqlite_errorcode, sqlite3.SQLITE_FULL)
+                self.assertEqual(db.execute("SELECT task FROM agents WHERE id='root'").fetchone()[0], "")
+                self.assertLessEqual(monitor.db_path().stat().st_size, monitor.MAX_DB_BYTES)
+            finally:
+                db.close()
+
+    def test_clear_returns_freed_space_to_disk(self):
+        db = monitor.connect()
+        try:
+            self.assertEqual(db.execute("PRAGMA auto_vacuum").fetchone()[0], 1)
+            with db:
+                db.executemany("""INSERT INTO agents (id,socket,pane,task,updated)
+                    VALUES (?, '/tmp/isolated-codex-test', '%1', ?, ?)""",
+                               [(f"agent-{i}", "x" * 2000, time.time()) for i in range(400)])
+        finally:
+            db.close()
+        before = monitor.db_path().stat().st_size
+        self.assertGreater(before, 500_000)
+        monitor.clear()
+        self.assertLess(monitor.db_path().stat().st_size, before // 4)
+        self.assertEqual(self.rows(), {})
+
+    def test_legacy_database_migration_preserves_active_records(self):
+        self.hook("PermissionRequest", tool_name="Bash")
+        legacy = sqlite3.connect(monitor.db_path())
+        legacy.execute("PRAGMA auto_vacuum=NONE")
+        legacy.execute("VACUUM")
+        self.assertEqual(legacy.execute("PRAGMA auto_vacuum").fetchone()[0], 0)
+        legacy.close()
+        db = monitor.connect()
+        try:
+            self.assertEqual(db.execute("PRAGMA auto_vacuum").fetchone()[0], 1)
+            self.assertEqual(db.execute("SELECT state FROM agents WHERE id='root'").fetchone()[0], "approval")
+            self.assertEqual(db.execute("PRAGMA integrity_check").fetchone()[0], "ok")
+        finally:
+            db.close()
+
+    def test_expired_and_closed_records_are_pruned_but_live_agents_remain(self):
+        self.hook("UserPromptSubmit")
+        self.hook("UserPromptSubmit", session="expired")
+        self.hook("SessionEnd", session="closed")
+        db = monitor.connect()
+        try:
+            with db:
+                db.execute("UPDATE agents SET updated=? WHERE id='expired'",
+                           (time.time() - monitor.RETENTION_SECONDS - 1,))
+        finally:
+            db.close()
+        self.hook("PreToolUse", tool_name="Bash")
+        self.assertEqual(set(self.rows()), {"root"})
+        db = monitor.connect()
+        try:
+            self.assertEqual(db.execute("SELECT count(*) FROM agents").fetchone()[0], 1)
+        finally:
+            db.close()
+
+    def test_oversized_legacy_file_is_preserved_without_new_writes(self):
+        self.hook("UserPromptSubmit")
+        legacy = sqlite3.connect(monitor.db_path())
+        with legacy:
+            legacy.execute("UPDATE agents SET task=zeroblob(?)", (128 * 1024,))
+        legacy.close()
+        before = monitor.db_path().read_bytes()
+        with patch.object(monitor, "MAX_DB_BYTES", 64 * 1024):
+            with self.assertRaises(sqlite3.DatabaseError):
+                monitor.connect()
+        self.assertEqual(monitor.db_path().read_bytes(), before)
 
 
 if __name__ == "__main__":

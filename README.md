@@ -140,7 +140,17 @@ agents when you ask Codex to use them.
 State lives in `$XDG_STATE_HOME/codex-tmux/state.sqlite3` (default
 `~/.local/state/codex-tmux/state.sqlite3`), separate from Codex's private database.
 It stores short task summaries and tool names, not full transcripts or shell
-commands. Hooks track supported tool events rather than streaming the agent's
+commands. Each agent has one row that is updated in place. Hooks remove records
+older than seven days and closed sessions; CLI exit removes its pane's records.
+SQLite FULL auto-vacuum returns freed pages to disk on commit. Every writer
+connection enforces a **16 MiB limit on the main database file**. Temporary
+rollback journals and migration files can use additional space while writing.
+At the limit, monitoring updates can be skipped; Codex work and approval behavior
+continue normally. Live records are not evicted to make room. Older databases
+are migrated automatically; a legacy file already above the cap is left intact
+and monitoring writes are skipped until it is cleaned up separately.
+
+Hooks track supported tool events rather than streaming the agent's
 internal reasoning. Approval alerts can briefly appear during automatic approval
 review. Unsupported question/MCP elicitation paths cannot be detected reliably.
 
