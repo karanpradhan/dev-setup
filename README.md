@@ -96,6 +96,19 @@ chsh -s "$HOME/.nix-profile/bin/zsh"
 git clone https://github.com/nvim-lua/kickstart.nvim.git "${XDG_CONFIG_HOME:-$HOME/.config}"/nvim
 ```
 
+## CLI reminders
+
+Run `tools` for a cheat sheet of the installed CLI tools, examples, and fzf
+shortcuts. Run `tools --tip` for a single random reminder. Interactive terminals
+show one tip each day; the date is stored under
+`$XDG_STATE_HOME/cli-tools/last-tip` (default `~/.local/state/cli-tools/last-tip`).
+Tabs and tmux panes share this record. Shells opened at exactly the same time
+may both display a tip.
+
+To disable automatic tips, add `export CLI_TIPS=0` to `~/.zshrc.local`.
+The `tools` command remains available. Scripts and noninteractive shells do not
+show automatic tips.
+
 ## Python scratchpad
 
 Press **prefix + p** (normally **Ctrl+B**, then **p**) to open a persistent

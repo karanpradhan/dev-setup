@@ -112,8 +112,50 @@
 
       mkcd() { mkdir -p "$1" && cd "$1"; }
 
+      # Keep CLI examples available on demand and show one per day.
+      tools() {
+        emulate -L zsh
+        local -a tips=(
+          'fd config — find files with config in their name'
+          'rg -n "TODO" — search file contents with line numbers'
+          'bat home.nix — read a file with syntax highlighting'
+          'll — list files with eza; tree2 — show two directory levels'
+          'z setup — jump to a frequently visited directory'
+          'lazygit — browse Git changes interactively'
+          'yazi — browse files interactively'
+          'btop — inspect processes and resource usage'
+          'tldr rg — see practical command examples'
+          'jq . data.json — pretty-print JSON'
+          'Ctrl+R — search command history with fzf'
+          'Ctrl+T — select a file path with fzf'
+          'Alt+C — select a directory with fzf'
+        )
+        if [[ "$1" == --tip ]]; then
+          print -r -- "CLI tip: $tips[$(( RANDOM % ''${#tips} + 1 ))]"
+          print -r -- 'Run tools for all examples. Disable daily tips with CLI_TIPS=0.'
+        else
+          print -rl -- "''${tips[@]}"
+        fi
+      }
+
+      _cli_daily_tip() {
+        emulate -L zsh
+        [[ -o interactive && -t 0 && -t 1 && ''${CLI_TIPS:-1} != 0 ]] || return 0
+        local tip_dir="''${XDG_STATE_HOME:-$HOME/.local/state}/cli-tools"
+        local today previous
+        today=$(command date +%F) || return 0
+        [[ -r "$tip_dir/last-tip" ]] && IFS= read -r previous < "$tip_dir/last-tip"
+        [[ "$previous" == "$today" ]] && return 0
+        command mkdir -p -- "$tip_dir" 2>/dev/null || return 0
+        print -r -- "$today" > "$tip_dir/last-tip" 2>/dev/null || return 0
+        tools --tip
+      }
+
       # Optional local overrides
       [ -f "$HOME/.zshrc.local" ] && source "$HOME/.zshrc.local"
+
+      _cli_daily_tip
+      unfunction _cli_daily_tip
 
     '';
   };
@@ -213,7 +255,7 @@ set -g mouse on
 set -g history-limit 50000
 
 # Quality of life
-set -g visual-bell on
+set -g visual-bell off
 set -g bell-action any
 set -g escape-time 10
 set -g focus-events on
