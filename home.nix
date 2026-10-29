@@ -128,9 +128,9 @@
 
       mkcd() { mkdir -p "$1" && cd "$1"; }
 
-      # A per-terminal server gives global hooks the correct tmux pane context.
+      # A per-terminal server gives hooks the correct pane; agents needs the shared server.
       codex() {
-        if [[ -o interactive && -t 0 && -t 1 && -n "$TMUX" && -n "$TMUX_PANE" ]]; then
+        if [[ "$1" != agents && -o interactive && -t 0 && -t 1 && -n "$TMUX" && -n "$TMUX_PANE" ]]; then
           ${pkgs.python311}/bin/python3 ${lib.escapeShellArg "${config.xdg.configHome}/tmux/codex-monitor.py"} clear
           CODEX_TMUX_MONITOR=1 command codex --no-daemon "$@"
           local codex_status=$?

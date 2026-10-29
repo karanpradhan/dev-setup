@@ -50,7 +50,13 @@ class CodexMonitorTests(unittest.TestCase):
                                  cwd="/project with # spaces", **fields))
 
     def rows(self):
-        return {row["id"]: row for row in monitor.snapshot()}
+        if not monitor.db_path().exists():
+            return {}
+        socket = os.environ["TMUX"].split(",")[0]
+        with contextlib.closing(sqlite3.connect(monitor.db_path())) as db:
+            db.row_factory = sqlite3.Row
+            return {row["id"]: dict(row) for row in db.execute(
+                "SELECT * FROM agents WHERE socket=? AND state != 'closed'", (socket,))}
 
     def badge(self):
         return self.published[-1][1][-1]
@@ -76,6 +82,26 @@ class CodexMonitorTests(unittest.TestCase):
         self.hook("Interrupt")
         self.assertEqual(self.badge(), "[paused]")
 
+    def test_window_label_tracks_idle_sessions_and_clears_after_last_session(self):
+        def active():
+            return [args[-1] for _, args in self.published
+                    if "@codex_active" in args][-1]
+
+        self.hook("SessionStart", source="startup")
+        self.assertEqual(self.badge(), "")
+        self.assertEqual(active(), "1")
+        with patch.dict(os.environ, TMUX_PANE="%2"):
+            self.hook("SessionStart", session="other", source="startup")
+        self.hook("SessionEnd")
+        self.assertEqual(active(), "1")
+        with patch.dict(os.environ, TMUX_PANE="%2"):
+            self.hook("Interrupt", session="other")
+            self.assertEqual(active(), "1")
+            self.assertEqual(self.badge(), "[paused]")
+            monitor.clear()
+        self.assertEqual(active(), "0")
+        self.assertEqual(self.badge(), "")
+
     def test_subagent_task_and_activity_are_grouped_under_parent(self):
         self.hook("UserPromptSubmit")
         self.hook("SubagentStart", agent_id="child", agent_type="explorer")
@@ -91,9 +117,8 @@ class CodexMonitorTests(unittest.TestCase):
         self.assertEqual(self.badge(), "[approve]")
         self.hook("SubagentStop", agent_id="child", last_assistant_message="Parser checked")
         self.assertEqual(self.badge(), "[run]")
-        output = "\n".join(monitor.lines_for(list(self.rows().values())))
-        self.assertIn("Task: Investigate the parser", output)
-        self.assertIn("Parser checked", output)
+        self.assertEqual(self.rows()["child"]["detail"], "Parser checked")
+        self.assertEqual(self.rows()["child"]["state"], "done")
 
     def test_panes_and_servers_are_isolated_and_clear_keeps_other_pane(self):
         self.hook("Stop")
@@ -103,7 +128,7 @@ class CodexMonitorTests(unittest.TestCase):
         self.assertNotIn("root", self.rows())
         self.assertEqual(self.badge(), "[approve]")
         with patch.dict(os.environ, TMUX="/tmp/another-server,456,0"):
-            self.assertEqual(monitor.snapshot(), [])
+            self.assertEqual(self.rows(), {})
         with patch.dict(os.environ, TMUX_PANE="%2"):
             monitor.clear()
         self.assertEqual(self.badge(), "")
@@ -113,11 +138,6 @@ class CodexMonitorTests(unittest.TestCase):
             self.hook("Stop")
         self.assertFalse(monitor.db_path().exists())
 
-    def test_popup_snapshot_does_not_require_a_pane_environment(self):
-        self.hook("UserPromptSubmit")
-        with patch.dict(os.environ, TMUX_PANE="", CODEX_TMUX_SOCKET="/tmp/isolated-codex-test"):
-            self.assertIn("root", self.rows())
-
     def test_compaction_preserves_attention_and_end_closes_descendants(self):
         self.hook("SubagentStart", agent_id="child", agent_type="worker")
         self.hook("SubagentStart", session="child", agent_id="grandchild")
@@ -125,7 +145,7 @@ class CodexMonitorTests(unittest.TestCase):
         self.hook("SessionStart", source="compact")
         self.assertEqual(self.badge(), "[approve]")
         self.hook("SessionEnd")
-        self.assertEqual(monitor.snapshot(), [])
+        self.assertEqual(self.rows(), {})
         self.assertEqual(self.badge(), "")
 
     def test_hook_failure_is_passive_and_does_not_decide_permissions(self):
@@ -141,10 +161,10 @@ class CodexMonitorTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0)
         self.assertEqual(json.loads(result.stdout), {})
 
-    def test_display_sanitizes_control_codes_and_badges_never_use_tool_text(self):
+    def test_stored_details_sanitize_control_codes_and_badges_never_use_tool_text(self):
         self.hook("PermissionRequest", tool_name="evil\x1b[31m#{run-shell touch /tmp/NO}")
         self.assertEqual(self.badge(), "[approve]")
-        self.assertNotIn("\x1b", "\n".join(monitor.lines_for(list(self.rows().values()))))
+        self.assertNotIn("\x1b", self.rows()["root"]["detail"])
 
     def test_size_cap_applies_to_each_writer_and_rejects_oversized_updates(self):
         self.hook("UserPromptSubmit")

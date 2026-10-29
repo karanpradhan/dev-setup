@@ -1,17 +1,15 @@
 #!/usr/bin/env python3
-"""Codex lifecycle observer and tmux agent popup (Python standard library only).
+"""Codex lifecycle observer for tmux tab badges (Python standard library only).
 
 Hooks only observe events: stdout is always {}, never an approval or decision.
 SQLite serializes concurrent hooks. Each tmux-launched CLI runs without the shared
 daemon so TMUX/TMUX_PANE identify its actual terminal, including in subagents.
 """
 import argparse
-import curses
 import json
 import os
 from pathlib import Path
 import re
-import shlex
 import sqlite3
 import subprocess
 import sys
@@ -102,8 +100,10 @@ def publish(db, socket, pane):
     # Query the current window, so moving panes and multiple Codex panes work.
     window = tmux(socket, "display-message", "-p", "-t", pane, "#{window_id}")
     panes = tmux(socket, "list-panes", "-t", window, "-F", "#{pane_id}").splitlines()
-    rows = [row for row in db.execute("SELECT * FROM agents WHERE socket=?", (socket,))
-            if row["pane"] in panes]
+    rows = [row for row in db.execute(
+        "SELECT * FROM agents WHERE socket=? AND state != 'closed'", (socket,))
+        if row["pane"] in panes]
+    tmux(socket, "set-option", "-w", "-t", window, "@codex_active", "1" if rows else "0")
     tmux(socket, "set-option", "-w", "-t", window, "@codex_badge", badge(rows))
 
 
@@ -214,117 +214,22 @@ def clear():
         db.close()
 
 
-def snapshot():
-    if not db_path().exists():
-        return []
-    db = sqlite3.connect(db_path().as_uri() + "?mode=ro", uri=True, timeout=0.2)
-    db.row_factory = sqlite3.Row
-    try:
-        # Popups do not necessarily inherit a pane id from tmux's job environment.
-        socket = os.environ.get("CODEX_TMUX_SOCKET", os.environ.get("TMUX", "").split(",")[0])
-        return [dict(row) for row in db.execute(
-            "SELECT * FROM agents WHERE socket=? AND state != 'closed' ORDER BY updated DESC", (socket,))]
-    finally:
-        db.close()
-
-
-def lines_for(rows):
-    lines = []
-    by_id = {row["id"]: row for row in rows}
-    seen = set()
-
-    def add(row, depth):
-        if row["id"] in seen:
-            return
-        seen.add(row["id"])
-        indent = "  " * min(depth, 8)
-        age = max(0, int(time.time() - row["updated"]))
-        label = "agent " + row["id"][:12] if row["parent"] else row["cwd"]
-        lines.append(f"{indent}{clean(row['pane'])}  {clean(row['state']).upper():11}  {clean(label, 500)}  ({age}s ago)")
-        if row["task"]:
-            lines.append(indent + "  Task: " + clean(row["task"]))
-        lines.append(indent + "  " + clean(row["detail"]))
-        for child in rows:
-            if child["parent"] == row["id"]:
-                add(child, depth + 1)
-
-    for row in rows:
-        if row["parent"] not in by_id:
-            add(row, 0)
-    for row in rows:
-        add(row, 0)
-    return lines
-
-
-def dashboard(screen):
-    # Disable terminal flow control so Ctrl+Q reaches the popup as a key.
-    curses.raw()
-    curses.curs_set(0)
-    screen.timeout(1000)
-    offset = 0
-    while True:
-        screen.erase()
-        height, width = screen.getmaxyx()
-        try:
-            rows = snapshot()
-            lines = lines_for(rows) if rows else [
-                "No tracked Codex sessions on this tmux server.",
-                "Open a new Zsh shell, start codex, and trust the hooks with /hooks."]
-        except sqlite3.Error:
-            lines = ["Waiting for the next hook update..."]
-        offset = min(offset, max(0, len(lines) - max(1, height - 3)))
-        display = ["Codex agents | q / Esc / Ctrl+Q close | arrows scroll | refresh 1s", ""]
-        display += lines[offset:offset + max(0, height - 3)]
-        for y, line in enumerate(display[:max(0, height - 1)]):
-            try:
-                screen.addnstr(y, 0, line, max(0, width - 1))
-            except curses.error:
-                pass
-        screen.refresh()
-        key = screen.getch()
-        if key in (ord("q"), 27, 17):
-            return
-        if key in (curses.KEY_DOWN, ord("j")):
-            offset += 1
-        elif key in (curses.KEY_UP, ord("k")):
-            offset = max(0, offset - 1)
-
-
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=("hook", "clear", "popup", "dashboard", "list"))
-    parser.add_argument("--client")
-    parser.add_argument("--socket")
+    parser.add_argument("action", choices=("hook", "clear"))
     args = parser.parse_args()
-    if args.action in ("hook", "clear"):
-        try:
-            if args.action == "hook":
-                event = json.load(sys.stdin)
-                if isinstance(event, dict):
-                    handle_hook(event)
-            else:
-                clear()
-        except (OSError, ValueError, sqlite3.Error, subprocess.SubprocessError):
-            # Monitoring must never block work or decide an approval.
-            pass
+    try:
         if args.action == "hook":
-            print("{}")
-    elif args.action == "list":
-        print("\n".join(lines_for(snapshot())))
-    elif args.action == "dashboard":
-        curses.wrapper(dashboard)
-    else:
-        socket = args.socket or os.environ.get("TMUX", "").split(",")[0]
-        if not socket or not args.client:
-            parser.error("popup requires a tmux socket and --client")
-        tmux_args = ["display-popup", "-c", args.client, "-E", "-w", "90%", "-h", "75%",
-                     "-e", "CODEX_TMUX_SOCKET=" + socket,
-                     "-e", "XDG_STATE_HOME=" + str(db_path().parent.parent),
-                     "-b", "rounded", "-s", "bg=#232136,fg=#e0def4",
-                     "-S", "bg=#232136,fg=#c4a7e7", "-T", " Codex agents ",
-                     shlex.join([sys.executable, str(Path(__file__).resolve()), "dashboard"])]
-        # Popup remains open until its command exits; no short subprocess timeout.
-        subprocess.run(["tmux", "-S", socket, *tmux_args], check=True)
+            event = json.load(sys.stdin)
+            if isinstance(event, dict):
+                handle_hook(event)
+        else:
+            clear()
+    except (OSError, ValueError, sqlite3.Error, subprocess.SubprocessError):
+        # Monitoring must never block work or decide an approval.
+        pass
+    if args.action == "hook":
+        print("{}")
 
 
 if __name__ == "__main__":

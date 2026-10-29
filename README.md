@@ -111,14 +111,16 @@ show automatic tips.
 
 ## Global Codex tmux integration
 
-With Codex CLI 0.165.0 or later, **prefix + a** opens a live popup of tracked
-sessions and subagents across the current tmux server. It shows each agent's
-state, latest observed tool, and task when the spawn hook exposes it. Completed
-subagents remain visible until their parent session closes. The popup refreshes
-every second; use **q**, **Escape**, or **Ctrl+Q** to close it, and arrows or j/k
-to scroll. Closing the popup leaves Codex running.
+With Codex CLI 0.165.0 or later, **prefix + a** opens the native `codex agents`
+overview in a popup, starting in the current pane's directory. Use Codex's own
+navigation and exit shortcuts; the popup closes when the command exits.
+This overview uses the shared server. Sessions launched through the tab-badge
+wrapper below use `--no-daemon` and are not live sessions on that shared server.
+To start a shared-server session that the overview can manage, use
+`command codex`; that session will not have hook-driven tab badges.
 
-Window tabs show `[run]`, `[approve]`, `[question]`, `[done]`, or `[paused]`.
+Tracked window tabs use the name `codex` (even when the process is `node`) and
+show `[run]`, `[approve]`, `[question]`, `[done]`, or `[paused]`.
 Approval and question badges take priority, including requests from subagents.
 A new prompt or resumed tool activity clears that session's attention badge;
 exiting Codex clears its pane's records. Merely visiting a window does not
@@ -133,9 +135,10 @@ them. These hooks only observe events and never approve or deny commands.
 
 The Zsh `codex` function uses `--no-daemon` in interactive tmux terminals so hook
 events inherit the correct pane instead of the shared server's first terminal.
+`codex agents` uses the shared server normally and is not pane-tracked.
 Outside tmux it invokes Codex normally. `command codex` bypasses the wrapper and
-is not tracked. The integration does not enable subagent delegation; it displays
-agents when you ask Codex to use them.
+is not tracked. The integration does not enable subagent delegation; tab badges
+include subagent state when you ask Codex to use them.
 
 State lives in `$XDG_STATE_HOME/codex-tmux/state.sqlite3` (default
 `~/.local/state/codex-tmux/state.sqlite3`), separate from Codex's private database.
