@@ -109,24 +109,14 @@ To disable automatic tips, add `export CLI_TIPS=0` to `~/.zshrc.local`.
 The `tools` command remains available. Scripts and noninteractive shells do not
 show automatic tips.
 
-## Codex agents popup
+## Tmux program names
 
-**Prefix + a** opens the native `codex agents` overview in a popup, starting in
-the current pane's directory. It requires a Codex CLI version with the `agents`
-command available on PATH. Use Codex's own navigation and exit shortcuts; the
-popup closes when the command exits.
-
-Codex runs normally with its shared server. The popup needs no custom hooks,
-wrapper, or database. After applying this update from the old monitor setup,
-open a new Zsh shell and restart existing Codex sessions so they use the shared
-server rather than the old wrapper's `--no-daemon` mode.
-
-The installation copy of `tmux/` from step 5 is required. For an existing tmux
-server, load the popup binding without restarting:
-
-```bash
-tmux source-file ~/.config/tmux/codex-agents.conf
-```
+Zsh command hooks label tmux tabs `codex` when launching Codex, including an
+explicit `node /path/to/codex.js` invocation, and clear the label on prompt return.
+Other Node programs keep their normal `node` label. No process polling is used.
+After copying `tmux/` as described in step 5, reload the tab configuration in an
+existing server with `tmux source-file ~/.config/tmux/program-name.conf` and
+load the shell hooks with `source ~/.config/tmux/program-name.zsh`.
 
 ## Python scratchpad
 
