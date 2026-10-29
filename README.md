@@ -109,60 +109,14 @@ To disable automatic tips, add `export CLI_TIPS=0` to `~/.zshrc.local`.
 The `tools` command remains available. Scripts and noninteractive shells do not
 show automatic tips.
 
-## Global Codex tmux integration
+## Tmux program names
 
-With Codex CLI 0.165.0 or later, **prefix + a** opens a live popup of tracked
-sessions and subagents across the current tmux server. It shows each agent's
-state, latest observed tool, and task when the spawn hook exposes it. Completed
-subagents remain visible until their parent session closes. The popup refreshes
-every second; use **q**, **Escape**, or **Ctrl+Q** to close it, and arrows or j/k
-to scroll. Closing the popup leaves Codex running.
-
-Window tabs show `[run]`, `[approve]`, `[question]`, `[done]`, or `[paused]`.
-Approval and question badges take priority, including requests from subagents.
-A new prompt or resumed tool activity clears that session's attention badge;
-exiting Codex clears its pane's records. Merely visiting a window does not
-acknowledge a pending request. Multiple panes in a window share its badge.
-
-Home Manager installs user-level hooks at `~/.codex/hooks.json`. After applying
-the configuration, open a new Zsh shell, start `codex`, and use **`/hooks` to
-review and trust the hooks**. Changed hook definitions may require another trust
-review. Existing sessions must be restarted to pick up the integration. If you
-already have hooks, merge their definitions before applying; do not overwrite
-them. These hooks only observe events and never approve or deny commands.
-
-The Zsh `codex` function uses `--no-daemon` in interactive tmux terminals so hook
-events inherit the correct pane instead of the shared server's first terminal.
-Outside tmux it invokes Codex normally. `command codex` bypasses the wrapper and
-is not tracked. The integration does not enable subagent delegation; it displays
-agents when you ask Codex to use them.
-
-State lives in `$XDG_STATE_HOME/codex-tmux/state.sqlite3` (default
-`~/.local/state/codex-tmux/state.sqlite3`), separate from Codex's private database.
-It stores short task summaries and tool names, not full transcripts or shell
-commands. Each agent has one row that is updated in place. Hooks remove records
-older than seven days and closed sessions; CLI exit removes its pane's records.
-SQLite FULL auto-vacuum returns freed pages to disk on commit. Every writer
-connection enforces a **16 MiB limit on the main database file**. Temporary
-rollback journals and migration files can use additional space while writing.
-At the limit, monitoring updates can be skipped; Codex work and approval behavior
-continue normally. Live records are not evicted to make room. Older databases
-are migrated automatically; a legacy file already above the cap is left intact
-and monitoring writes are skipped until it is cleaned up separately.
-
-Hooks track supported tool events rather than streaming the agent's
-internal reasoning. Approval alerts can briefly appear during automatic approval
-review. Unsupported question/MCP elicitation paths cannot be detected reliably.
-
-For an existing tmux server, load the binding and tab formats without restarting:
-
-```bash
-tmux source-file ~/.config/tmux/codex-monitor.conf
-```
-
-The installation copy of `tmux/` from step 5 is required for this integration as
-well as the Python scratchpad. See the [official Codex hook documentation](https://learn.chatgpt.com/docs/hooks)
-for supported events and the hook trust workflow.
+Zsh command hooks label tmux tabs `codex` when launching Codex, including an
+explicit `node /path/to/codex.js` invocation, and clear the label on prompt return.
+Other Node programs keep their normal `node` label. No process polling is used.
+After copying `tmux/` as described in step 5, reload the tab configuration in an
+existing server with `tmux source-file ~/.config/tmux/program-name.conf` and
+load the shell hooks with `source ~/.config/tmux/program-name.zsh`.
 
 ## Python scratchpad
 

@@ -52,21 +52,8 @@
   # Keep the persistent IPython scratchpad beside its tmux binding.
   xdg.configFile."tmux/python-pad.py".source = ./tmux/python-pad.py;
   xdg.configFile."tmux/python-pad.conf".source = ./tmux/python-pad.conf;
-  xdg.configFile."tmux/codex-monitor.py".source = ./tmux/codex-monitor.py;
-  xdg.configFile."tmux/codex-monitor.conf".source = ./tmux/codex-monitor.conf;
-  # User-level hooks apply in every repository; keep other Codex settings local.
-  home.file.".codex/hooks.json".text = builtins.toJSON {
-    hooks = builtins.listToAttrs (map (event: {
-      name = event;
-      value = [{ hooks = [{
-        type = "command";
-        command = "${pkgs.python311}/bin/python3 ${lib.escapeShellArg "${config.xdg.configHome}/tmux/codex-monitor.py"} hook";
-        timeout = 3;
-      }]; }];
-    }) [ "SessionStart" "SessionEnd" "UserPromptSubmit" "PreToolUse"
-         "PostToolUse" "PermissionRequest" "SubagentStart" "SubagentStop"
-         "Stop" "Interrupt" ]);
-  };
+  xdg.configFile."tmux/program-name.zsh".source = ./tmux/program-name.zsh;
+  xdg.configFile."tmux/program-name.conf".source = ./tmux/program-name.conf;
   home.sessionVariables = {
 
     TERM = "xterm-256color";
@@ -113,6 +100,9 @@
       # Make sure global npm binaries are on PATH
       export PATH="$HOME/.npm-global/bin:$PATH"
 
+      # Update tmux's Codex label only at command start and prompt return.
+      source ~/.config/tmux/program-name.zsh
+
       # Nix env
       if [ -f "$HOME/.nix-profile/etc/profile.d/nix.sh" ]; then
         . "$HOME/.nix-profile/etc/profile.d/nix.sh"
@@ -127,19 +117,6 @@
       export PATH=/home/karan/.opencode/bin:$PATH
 
       mkcd() { mkdir -p "$1" && cd "$1"; }
-
-      # A per-terminal server gives global hooks the correct tmux pane context.
-      codex() {
-        if [[ -o interactive && -t 0 && -t 1 && -n "$TMUX" && -n "$TMUX_PANE" ]]; then
-          ${pkgs.python311}/bin/python3 ${lib.escapeShellArg "${config.xdg.configHome}/tmux/codex-monitor.py"} clear
-          CODEX_TMUX_MONITOR=1 command codex --no-daemon "$@"
-          local codex_status=$?
-          ${pkgs.python311}/bin/python3 ${lib.escapeShellArg "${config.xdg.configHome}/tmux/codex-monitor.py"} clear
-          return "$codex_status"
-        else
-          command codex "$@"
-        fi
-      }
 
       # Keep CLI examples available on demand and show one per day.
       tools() {
@@ -310,12 +287,6 @@ bind-key -T copy-mode-vi v send-keys -X begin-selection
 bind-key -T copy-mode-vi y send-keys -X copy-selection-and-cancel
 bind-key -T copy-mode-vi Escape send-keys -X cancel
 
-# Automatic program names
-# Extract basename to avoid displaying Nix store paths
-setw -g automatic-rename on
-setw -g automatic-rename-format '#{b:pane_current_command}'
-set -g allow-rename off
-
 # Rosé Pine Moon theme
 set -g @rose_pine_variant 'moon'
 set -g @rose_pine_date_time '%Y-%m-%d'
@@ -344,11 +315,8 @@ set -g status-right '#[fg=#9ccfd8]%Y-%m-%d '
 set -g status-right-length 40
 set -g window-status-separator ' '
 
-# Tabs: program + directory (or explicit activity)
-set -g window-status-format '#[fg=#908caa,bg=#232136] #I: #{pane_current_command} '
-
-# Active tab: amber highlight
-set -g window-status-current-format '#[fg=#232136,bg=#f6c177,bold] #I: #{pane_current_command} #[default]'
+# Resolve Node launchers such as Codex, then use the resolved window name in tabs.
+source-file ~/.config/tmux/program-name.conf
 
 # Pane borders
 set -g pane-border-style 'fg=#44415a'
@@ -362,7 +330,8 @@ set -g pane-active-border-style 'fg=#f6c177'
 
 # Persistent IPython popup (prefix + p), available in folders with a local venv.
 source-file ~/.config/tmux/python-pad.conf
-source-file ~/.config/tmux/codex-monitor.conf
+# Remove the former Codex popup binding when reloading an existing server.
+unbind-key a
 
 '';
 };
