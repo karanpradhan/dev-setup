@@ -52,21 +52,7 @@
   # Keep the persistent IPython scratchpad beside its tmux binding.
   xdg.configFile."tmux/python-pad.py".source = ./tmux/python-pad.py;
   xdg.configFile."tmux/python-pad.conf".source = ./tmux/python-pad.conf;
-  xdg.configFile."tmux/codex-monitor.py".source = ./tmux/codex-monitor.py;
-  xdg.configFile."tmux/codex-monitor.conf".source = ./tmux/codex-monitor.conf;
-  # User-level hooks apply in every repository; keep other Codex settings local.
-  home.file.".codex/hooks.json".text = builtins.toJSON {
-    hooks = builtins.listToAttrs (map (event: {
-      name = event;
-      value = [{ hooks = [{
-        type = "command";
-        command = "${pkgs.python311}/bin/python3 ${lib.escapeShellArg "${config.xdg.configHome}/tmux/codex-monitor.py"} hook";
-        timeout = 3;
-      }]; }];
-    }) [ "SessionStart" "SessionEnd" "UserPromptSubmit" "PreToolUse"
-         "PostToolUse" "PermissionRequest" "SubagentStart" "SubagentStop"
-         "Stop" "Interrupt" ]);
-  };
+  xdg.configFile."tmux/codex-agents.conf".source = ./tmux/codex-agents.conf;
   home.sessionVariables = {
 
     TERM = "xterm-256color";
@@ -127,19 +113,6 @@
       export PATH=/home/karan/.opencode/bin:$PATH
 
       mkcd() { mkdir -p "$1" && cd "$1"; }
-
-      # A per-terminal server gives hooks the correct pane; agents needs the shared server.
-      codex() {
-        if [[ "$1" != agents && -o interactive && -t 0 && -t 1 && -n "$TMUX" && -n "$TMUX_PANE" ]]; then
-          ${pkgs.python311}/bin/python3 ${lib.escapeShellArg "${config.xdg.configHome}/tmux/codex-monitor.py"} clear
-          CODEX_TMUX_MONITOR=1 command codex --no-daemon "$@"
-          local codex_status=$?
-          ${pkgs.python311}/bin/python3 ${lib.escapeShellArg "${config.xdg.configHome}/tmux/codex-monitor.py"} clear
-          return "$codex_status"
-        else
-          command codex "$@"
-        fi
-      }
 
       # Keep CLI examples available on demand and show one per day.
       tools() {
@@ -362,7 +335,8 @@ set -g pane-active-border-style 'fg=#f6c177'
 
 # Persistent IPython popup (prefix + p), available in folders with a local venv.
 source-file ~/.config/tmux/python-pad.conf
-source-file ~/.config/tmux/codex-monitor.conf
+# Native Codex agents overview (prefix + a).
+source-file ~/.config/tmux/codex-agents.conf
 
 '';
 };
