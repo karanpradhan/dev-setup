@@ -138,10 +138,13 @@ and detach shortcut do not change the main session. Underlying panes continue
 running while the overlay is open, but tmux pauses their visual refresh.
 
 The Rosé Pine Moon tmux theme and session restoration configuration reference
-TPM plugins. Install TPM and use its install binding (prefix + I) if desired:
+TPM plugins. The configuration skips TPM when it is absent, so reloading still
+works; the plugin theme and session restoration require installing the plugins.
+Install TPM, reload the configuration, then press **prefix + I** (capital I):
 
 ```bash
 git clone https://github.com/tmux-plugins/tpm ~/.tmux/plugins/tpm
+tmux source-file ~/.config/tmux/tmux.conf
 ```
 
 ## Verification
