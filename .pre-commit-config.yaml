@@ -1,0 +1,9 @@
+repos:
+  - repo: local
+    hooks:
+      - id: treefmt
+        name: Format repository with treefmt
+        entry: nix-shell --run 'treefmt --ci'
+        language: system
+        pass_filenames: false
+        always_run: true

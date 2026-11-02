@@ -21,6 +21,7 @@ cd dev-setup
 ```
 
 ### 1. Install dependencies
+
 ```bash
 sudo apt update && sudo apt install -y curl git zsh xz-utils
 
@@ -146,6 +147,63 @@ Install TPM, reload the configuration, then press **prefix + I** (capital I):
 git clone https://github.com/tmux-plugins/tpm ~/.tmux/plugins/tpm
 tmux source-file ~/.config/tmux/tmux.conf
 ```
+
+## Formatting
+
+Run all repository formatters without applying the Home Manager configuration:
+
+```bash
+nix-shell --run treefmt
+```
+
+Check formatting for CI (exits nonzero if files need formatting, and formats them):
+
+```bash
+nix-shell --run 'treefmt --ci'
+```
+
+The shell uses your configured `nixpkgs` channel (the setup above uses 24.11).
+Home Manager also installs these tools, so after deployment you can run
+`treefmt` or `treefmt --ci` directly from the repository root.
+
+| Files                                     | Formatter                |
+| ----------------------------------------- | ------------------------ |
+| Nix                                       | nixfmt (RFC style)       |
+| Python                                    | Ruff format              |
+| Lua (including the hidden WezTerm config) | StyLua                   |
+| JSON, Markdown, and YAML                  | Prettier                 |
+| TOML (formatter configuration)            | Taplo                    |
+| tmux `.conf` and `.gitignore`             | Local whitespace cleanup |
+
+The tmux and ignore-file cleanup only removes unescaped trailing whitespace and
+normalizes the final newline; it preserves command syntax and indentation.
+Embedded shell and tmux strings inside `home.nix` remain literal configuration
+content. Local environments, Python caches, and Nix build output are excluded.
+Run the commands from the repository root so the local cleanup script is found.
+
+### Pre-commit hook
+
+Enable the formatting hook once per clone:
+
+```bash
+nix-shell --run 'pre-commit install'
+```
+
+Every commit runs `treefmt --ci` through the Nix shell. If formatting changes
+files, the commit stops so you can review and stage the changes, then commit
+again. The hook does not stage files automatically. Pre-commit temporarily
+stashes unstaged changes while checking the staged content.
+
+Run the hook manually across the repository:
+
+```bash
+nix-shell --run 'pre-commit run --all-files'
+```
+
+The tools come from the Nix shell; no Home Manager deployment is required.
+After deployment, `pre-commit install` and `pre-commit run --all-files` also work
+directly. To disable the hook for this clone, run
+`nix-shell --run 'pre-commit uninstall'`.
 
 ## Verification
 

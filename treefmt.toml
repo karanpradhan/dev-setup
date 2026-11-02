@@ -1,0 +1,41 @@
+# Only format repository sources; never generated output or local environments.
+walk = "filesystem"
+excludes = [
+  ".git/*",
+  ".ruff_cache/*",
+  ".venv/*",
+  "venv/*",
+  "**/__pycache__/*",
+  "result",
+  "result-*",
+  "result-*/*",
+]
+
+[formatter.nix]
+command = "nixfmt"
+includes = ["*.nix"]
+
+[formatter.python]
+command = "ruff"
+options = ["format"]
+includes = ["*.py"]
+
+[formatter.lua]
+command = "stylua"
+includes = ["*.lua"]
+
+[formatter.prettier]
+command = "prettier"
+options = ["--write", "--prose-wrap", "preserve"]
+includes = ["*.json", "*.md", "*.yaml", "*.yml"]
+
+[formatter.toml]
+command = "taplo"
+options = ["format"]
+includes = ["*.toml"]
+
+# These are not shell scripts. Preserve quoting, commands, and indentation.
+[formatter.whitespace]
+command = "python3"
+options = ["scripts/format-whitespace.py"]
+includes = ["tmux/*.conf", ".gitignore"]

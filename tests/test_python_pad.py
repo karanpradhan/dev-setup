@@ -1,4 +1,5 @@
 """Check environment selection and missing-dependency behavior without tmux."""
+
 import importlib.util
 from pathlib import Path
 import subprocess
@@ -64,17 +65,23 @@ class PythonPadTests(unittest.TestCase):
 
     def test_dependency_check_uses_venv_python_and_handles_timeout(self):
         venv = self.make_venv(self.project)
-        with patch.object(pad.subprocess, "run", return_value=subprocess.CompletedProcess([], 0)) as run:
+        with patch.object(
+            pad.subprocess, "run", return_value=subprocess.CompletedProcess([], 0)
+        ) as run:
             self.assertTrue(pad.has_ipython(venv))
             self.assertEqual(run.call_args.args[0][0], str(venv / "bin/python"))
-        with patch.object(pad.subprocess, "run", side_effect=subprocess.TimeoutExpired("python", 10)):
+        with patch.object(
+            pad.subprocess, "run", side_effect=subprocess.TimeoutExpired("python", 10)
+        ):
             self.assertFalse(pad.has_ipython(venv))
 
     def test_missing_ipython_warns_without_starting_session(self):
         venv = self.make_venv(self.project, prompt="practice-env")
-        with patch.object(pad, "has_ipython", return_value=False), \
-                patch.object(pad, "run") as run, \
-                patch.object(sys, "argv", ["pad", "--pane", "%1", "--client", "client"]):
+        with patch.object(pad, "has_ipython", return_value=False), patch.object(
+            pad, "run"
+        ) as run, patch.object(
+            sys, "argv", ["pad", "--pane", "%1", "--client", "client"]
+        ):
             run.return_value.stdout = str(self.project) + "\n"
             pad.main()
         self.assertEqual(run.call_count, 2)
@@ -85,9 +92,11 @@ class PythonPadTests(unittest.TestCase):
         self.assertIn("uv pip install --python", warning[-1])
 
     def test_missing_venv_warns_without_dependency_check(self):
-        with patch.object(pad, "has_ipython") as check, \
-                patch.object(pad, "run") as run, \
-                patch.object(sys, "argv", ["pad", "--pane", "%1", "--client", "client"]):
+        with patch.object(pad, "has_ipython") as check, patch.object(
+            pad, "run"
+        ) as run, patch.object(
+            sys, "argv", ["pad", "--pane", "%1", "--client", "client"]
+        ):
             run.return_value.stdout = str(self.project) + "\n"
             pad.main()
         check.assert_not_called()
