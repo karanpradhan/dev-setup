@@ -109,15 +109,6 @@ To disable automatic tips, add `export CLI_TIPS=0` to `~/.zshrc.local`.
 The `tools` command remains available. Scripts and noninteractive shells do not
 show automatic tips.
 
-## Tmux program names
-
-Zsh command hooks label tmux tabs `codex` when launching Codex, including an
-explicit `node /path/to/codex.js` invocation, and clear the label on prompt return.
-Other Node programs keep their normal `node` label. No process polling is used.
-After copying `tmux/` as described in step 5, reload the tab configuration in an
-existing server with `tmux source-file ~/.config/tmux/program-name.conf` and
-load the shell hooks with `source ~/.config/tmux/program-name.zsh`.
-
 ## Python scratchpad
 
 Press **prefix + p** (normally **Ctrl+B**, then **p**) to open a persistent
