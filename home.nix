@@ -304,9 +304,9 @@ set -g @plugin 'rose-pine/tmux'
 set -g @plugin 'tmux-plugins/tmux-resurrect'
 set -g @plugin 'tmux-plugins/tmux-continuum'
 
-# TPM - install with:
+# TPM is optional; only load it when installed. Install with:
 # git clone https://github.com/tmux-plugins/tpm ~/.tmux/plugins/tpm
-run-shell '~/.tmux/plugins/tpm/tpm'
+run-shell 'if [ -x "$HOME/.tmux/plugins/tpm/tpm" ]; then "$HOME/.tmux/plugins/tpm/tpm"; fi'
 
 # Appearance overrides
 set -g status-style 'bg=#232136,fg=#e0def4'
