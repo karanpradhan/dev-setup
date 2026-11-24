@@ -33,7 +33,7 @@
     tree
     xclip
     wl-clipboard
-    nodejs_22
+    nodejs_24
     lua5_1
     luarocks
     eza
@@ -50,32 +50,7 @@
     gcc.cc.lib
     yazi
     gh
-    # Repository formatters (run together with treefmt).
-    treefmt
-    nixfmt-rfc-style
-    ruff
-    stylua
-    nodePackages.prettier
-    taplo
-    pre-commit
   ];
-
-  nixpkgs = {
-    overlays = [
-      (
-        final: prev:
-        let
-          unstable =
-            import (builtins.fetchTarball "https://github.com/NixOS/nixpkgs/archive/nixpkgs-unstable.tar.gz")
-              { inherit (prev.stdenv) system; };
-        in
-        {
-          neovim = unstable.neovim;
-          neovim-unwrapped = unstable.neovim-unwrapped;
-        }
-      )
-    ];
-  };
 
   home.file.".npmrc".text = ''
     prefix=${config.home.homeDirectory}/.npm-global
@@ -84,6 +59,8 @@
   # Keep the persistent IPython scratchpad beside its tmux binding.
   xdg.configFile."tmux/python-pad.py".source = ./tmux/python-pad.py;
   xdg.configFile."tmux/python-pad.conf".source = ./tmux/python-pad.conf;
+  xdg.configFile."tmux/program-name.zsh".source = ./tmux/program-name.zsh;
+  xdg.configFile."tmux/program-name.conf".source = ./tmux/program-name.conf;
   home.sessionVariables = {
 
     TERM = "xterm-256color";
@@ -113,7 +90,7 @@
       # cd = "z";
       # cat = "bat";
     };
-    initExtra = ''
+    initContent = ''
       # 1. Deduplicate PATH (CRITICAL)
       typeset -U path PATH
 
@@ -129,6 +106,9 @@
 
       # Make sure global npm binaries are on PATH
       export PATH="$HOME/.npm-global/bin:$PATH"
+
+      # Update tmux's Codex label only at command start and prompt return.
+      source ~/.config/tmux/program-name.zsh
 
       # Nix env
       if [ -f "$HOME/.nix-profile/etc/profile.d/nix.sh" ]; then
@@ -313,11 +293,6 @@
       bind-key -T copy-mode-vi y send-keys -X copy-selection-and-cancel
       bind-key -T copy-mode-vi Escape send-keys -X cancel
 
-      # Automatic program names
-      setw -g automatic-rename on
-      setw -g automatic-rename-format '#{b:pane_current_command}'
-      set -g allow-rename off
-
       # Rosé Pine Moon theme
       set -g @rose_pine_variant 'moon'
       set -g @rose_pine_date_time '%Y-%m-%d'
@@ -335,9 +310,9 @@
       set -g @plugin 'tmux-plugins/tmux-resurrect'
       set -g @plugin 'tmux-plugins/tmux-continuum'
 
-      # TPM is optional; only load it when installed. Install with:
+      # TPM - install with:
       # git clone https://github.com/tmux-plugins/tpm ~/.tmux/plugins/tpm
-      run-shell 'if [ -x "$HOME/.tmux/plugins/tpm/tpm" ]; then "$HOME/.tmux/plugins/tpm/tpm"; fi'
+      run-shell '~/.tmux/plugins/tpm/tpm'
 
       # Appearance overrides
       set -g status-style 'bg=#232136,fg=#e0def4'
@@ -346,9 +321,8 @@
       set -g status-right-length 40
       set -g window-status-separator ' '
 
-      # Tabs use the foreground process name.
-      set -g window-status-format '#[fg=#908caa,bg=#232136] #I: #{pane_current_command} '
-      set -g window-status-current-format '#[fg=#232136,bg=#f6c177,bold] #I: #{pane_current_command} #[default]'
+      # Resolve Node launchers such as Codex, then use the resolved window name in tabs.
+      source-file ~/.config/tmux/program-name.conf
 
       # Pane borders
       set -g pane-border-style 'fg=#44415a'
@@ -371,19 +345,12 @@
   # Git (optional identity)
   programs.git = {
     enable = true;
-    userName = "Karan Pradhan";
-    userEmail = "karanpradhan@gmail.com";
-  };
-
-  programs.neovim = {
-    enable = true;
-    viAlias = true;
-    vimAlias = true;
-    # extraPython3Packages = ps: with ps; [
-    # pynvim         # required for any Python-based Neovim plugin
-    # jupyter-client # Molten uses this -> fixes "No module named 'jupyter_client'"
-    # ipykernel      # so you can start real Jupyter kernels
-    # ];
+    settings = {
+      user = {
+        name = "Karan Pradhan";
+        email = "karanpradhan@gmail.com";
+      };
+    };
   };
 
   # ----- Activation Hooks -----

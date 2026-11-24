@@ -77,10 +77,10 @@ class PythonPadTests(unittest.TestCase):
 
     def test_missing_ipython_warns_without_starting_session(self):
         venv = self.make_venv(self.project, prompt="practice-env")
-        with patch.object(pad, "has_ipython", return_value=False), patch.object(
-            pad, "run"
-        ) as run, patch.object(
-            sys, "argv", ["pad", "--pane", "%1", "--client", "client"]
+        with (
+            patch.object(pad, "has_ipython", return_value=False),
+            patch.object(pad, "run") as run,
+            patch.object(sys, "argv", ["pad", "--pane", "%1", "--client", "client"]),
         ):
             run.return_value.stdout = str(self.project) + "\n"
             pad.main()
@@ -92,10 +92,10 @@ class PythonPadTests(unittest.TestCase):
         self.assertIn("uv pip install --python", warning[-1])
 
     def test_missing_venv_warns_without_dependency_check(self):
-        with patch.object(pad, "has_ipython") as check, patch.object(
-            pad, "run"
-        ) as run, patch.object(
-            sys, "argv", ["pad", "--pane", "%1", "--client", "client"]
+        with (
+            patch.object(pad, "has_ipython") as check,
+            patch.object(pad, "run") as run,
+            patch.object(sys, "argv", ["pad", "--pane", "%1", "--client", "client"]),
         ):
             run.return_value.stdout = str(self.project) + "\n"
             pad.main()

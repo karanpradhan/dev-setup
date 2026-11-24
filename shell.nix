@@ -8,7 +8,7 @@ pkgs.mkShell {
     nixfmt-rfc-style
     ruff
     stylua
-    nodePackages.prettier
+    prettier
     taplo
     pre-commit
     python311
